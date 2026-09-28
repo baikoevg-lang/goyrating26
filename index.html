@@ -262,11 +262,11 @@
     const GRAVITY = 0.9;
     const JUMP_POWER = -16;
 
-    // ==== Бананы ====
-    let bananas = [];
+    // ==== Писюны (наземные) ====
+    let dicks = [];
 
-    // ==== Птицы (летающие бананы) ====
-    let flyingBananas = [];
+    // ==== Летающие писюны ====
+    let flyingDicks = [];
 
     // ==== Облака ====
     let clouds = [];
@@ -340,29 +340,53 @@
       ctx.stroke();
     }
 
-    // ==== Рисование банана ====
-    function drawBanana(b) {
+    // ==== Рисование писюна ====
+    function drawDick(b) {
       ctx.save();
       ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
-      ctx.rotate(-0.3);
+      ctx.rotate(-0.15);
 
-      // тело банана
-      ctx.fillStyle = '#ffd700';
-      ctx.strokeStyle = '#b8860b';
+      const len = b.w;   // длина
+      const thick = b.h; // толщина
+
+      // ствол
+      ctx.fillStyle = '#f4c2a1';
+      ctx.strokeStyle = '#b07a55';
       ctx.lineWidth = 2;
+
       ctx.beginPath();
-      ctx.moveTo(-b.w / 2, 0);
-      ctx.quadraticCurveTo(-b.w / 4, -b.h / 2, b.w / 2, -b.h / 4);
-      ctx.quadraticCurveTo(b.w / 4, b.h / 2, -b.w / 2, 0);
+      ctx.moveTo(-len / 2, -thick / 2);
+      ctx.lineTo(len / 2 - 8, -thick / 2);
+      ctx.quadraticCurveTo(len / 2, -thick / 2, len / 2, -thick / 2 + 6);
+      ctx.quadraticCurveTo(len / 2, thick / 2 - 6, len / 2 - 8, thick / 2);
+      ctx.lineTo(-len / 2, thick / 2);
+      ctx.quadraticCurveTo(-len / 2 - 6, 0, -len / 2, -thick / 2);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // кончики
-      ctx.fillStyle = '#8b4513';
+      // головка (чуть темнее и круглее)
+      ctx.fillStyle = '#e89b76';
       ctx.beginPath();
-      ctx.arc(-b.w / 2, 0, 2.5, 0, Math.PI * 2);
-      ctx.arc(b.w / 2, -b.h / 4, 2.5, 0, Math.PI * 2);
+      ctx.ellipse(len / 2 - 6, 0, 9, thick / 2 + 2, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
+
+      // уретра (скромная точка)
+      ctx.fillStyle = '#8b4a2b';
+      ctx.beginPath();
+      ctx.arc(len / 2 + 2, 0, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // пара волосков у основания (для узнаваемости)
+      ctx.strokeStyle = '#5a3a22';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-len / 2 - 2, -thick / 2 + 2);
+      ctx.lineTo(-len / 2 - 6, -thick / 2 - 3);
+      ctx.moveTo(-len / 2 - 2, thick / 2 - 2);
+      ctx.lineTo(-len / 2 - 6, thick / 2 + 3);
+      ctx.stroke();
 
       ctx.restore();
     }
@@ -401,11 +425,11 @@
       }
     }
 
-    // ==== Спавн бананов ====
-    function spawnBanana() {
-      const h = 24 + Math.random() * 10;
-      const w = 30 + Math.random() * 10;
-      bananas.push({
+    // ==== Спавн писюнов ====
+    function spawnDick() {
+      const h = 20 + Math.random() * 8;   // толщина
+      const w = 40 + Math.random() * 12;  // длина
+      dicks.push({
         x: W + 20,
         y: GROUND_Y - h,
         w: w,
@@ -413,11 +437,11 @@
       });
     }
 
-    function spawnFlyingBanana() {
-      const h = 20;
-      const w = 30;
+    function spawnFlyingDick() {
+      const h = 18;
+      const w = 38;
       const y = GROUND_Y - 70 - Math.random() * 30;
-      flyingBananas.push({
+      flyingDicks.push({
         x: W + 20,
         y: y,
         w: w,
@@ -480,34 +504,34 @@
       if (spawnTimer >= spawnInterval) {
         spawnTimer = 0;
         if (Math.random() < 0.2 && score > 5) {
-          spawnFlyingBanana();
+          spawnFlyingDick();
         } else {
-          spawnBanana();
+          spawnDick();
         }
       }
 
-      // движение бананов
-      bananas.forEach(b => b.x -= speed);
-      flyingBananas.forEach(b => b.x -= speed + 1);
+      // движение писюнов
+      dicks.forEach(b => b.x -= speed);
+      flyingDicks.forEach(b => b.x -= speed + 1);
 
       // столкновения
       const pb = poopBox();
-      for (let i = bananas.length - 1; i >= 0; i--) {
-        if (collides(pb, bananas[i])) {
+      for (let i = dicks.length - 1; i >= 0; i--) {
+        if (collides(pb, dicks[i])) {
           gameOver();
           return;
         }
       }
-      for (let i = flyingBananas.length - 1; i >= 0; i--) {
-        if (collides(pb, flyingBananas[i])) {
+      for (let i = flyingDicks.length - 1; i >= 0; i--) {
+        if (collides(pb, flyingDicks[i])) {
           gameOver();
           return;
         }
       }
 
       // удаление ушедших
-      bananas = bananas.filter(b => b.x + b.w > -20);
-      flyingBananas = flyingBananas.filter(b => b.x + b.w > -20);
+      dicks = dicks.filter(b => b.x + b.w > -20);
+      flyingDicks = flyingDicks.filter(b => b.x + b.w > -20);
 
       // счёт
       score++;
@@ -518,8 +542,8 @@
     function draw() {
       drawBackground();
 
-      bananas.forEach(drawBanana);
-      flyingBananas.forEach(drawBanana);
+      dicks.forEach(drawDick);
+      flyingDicks.forEach(drawDick);
       drawPoop(poop);
 
       // счёт на канвасе
@@ -586,8 +610,8 @@
       frame = 0;
       spawnTimer = 0;
       spawnInterval = 90;
-      bananas = [];
-      flyingBananas = [];
+      dicks = [];
+      flyingDicks = [];
       poop.y = GROUND_Y;
       poop.vy = 0;
       poop.onGround = true;
