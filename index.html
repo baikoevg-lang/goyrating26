@@ -111,6 +111,34 @@
       color: #888888;
       margin-top: 20px;
     }
+
+    /* ==== Стили мини-игры ==== */
+    .game-frame {
+      border: 4px ridge #ff00ff;
+      background: #000000;
+      padding: 10px;
+      margin: 15px auto;
+      max-width: 720px;
+    }
+    .game-frame h2 {
+      margin-top: 0;
+    }
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background: #c0c0c0;
+      border: 3px inset #00ffff;
+      image-rendering: pixelated;
+      max-width: 100%;
+      cursor: pointer;
+    }
+    .game-help {
+      color: #00ffff;
+      font-size: 13px;
+      margin-top: 8px;
+      font-family: "Courier New", monospace;
+    }
+    .game-help b { color: #ffff00; }
   </style>
 </head>
 <body>
@@ -154,6 +182,27 @@
 
   <hr color="#ff00ff">
 
+  <!-- ================== МИНИ-ИГРА ================== -->
+  <div class="game-frame">
+    <h2>💩 КАКАШКА-РАННЕР 💩</h2>
+    <p style="color:#ffff00; font-size:14px; margin-top:0;">
+      Пародия на динозаврика из Google Chrome
+    </p>
+
+    <canvas id="gameCanvas" width="700" height="240"></canvas>
+
+    <p class="game-help">
+      <b>ПРОБЕЛ</b> или <b>↑</b> — прыжок &nbsp;|&nbsp;
+      <b>ПРОБЕЛ</b> — начать / перезапустить
+    </p>
+    <p class="game-help">
+      Рекорд: <b id="hiScore">0</b> &nbsp;|&nbsp; Счёт: <b id="score">0</b>
+    </p>
+  </div>
+  <!-- ============================================== -->
+
+  <hr color="#ff00ff">
+
   <p>
     <span class="counter">Посетителей: 000148</span>
     <span class="counter">Сегодня: 000042</span>
@@ -178,6 +227,408 @@
     © 2026 Рейтинг пидорасов. Все права защищены.<br>
     <span style="color:#ff0000;">Сайт находится в разработке!</span>
   </p>
+
+  <script>
+  (function () {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const hiEl = document.getElementById('hiScore');
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const GROUND_Y = H - 40;
+
+    // ==== Состояние игры ====
+    let state = 'ready'; // ready | playing | over
+    let score = 0;
+    let hiScore = parseInt(localStorage.getItem('kakaHiScore') || '0', 10);
+    hiEl.textContent = hiScore;
+
+    let speed = 6;
+    let frame = 0;
+    let spawnTimer = 0;
+    let spawnInterval = 90;
+
+    // ==== Какашка (игрок) ====
+    const poop = {
+      x: 70,
+      y: GROUND_Y,
+      w: 34,
+      h: 34,
+      vy: 0,
+      onGround: true
+    };
+    const GRAVITY = 0.9;
+    const JUMP_POWER = -16;
+
+    // ==== Бананы ====
+    let bananas = [];
+
+    // ==== Птицы (летающие бананы) ====
+    let flyingBananas = [];
+
+    // ==== Облака ====
+    let clouds = [];
+    for (let i = 0; i < 5; i++) {
+      clouds.push({
+        x: Math.random() * W,
+        y: 20 + Math.random() * 80,
+        s: 0.3 + Math.random() * 0.5
+      });
+    }
+
+    // ==== Рисование какашки ====
+    function drawPoop(p) {
+      const x = p.x;
+      const y = p.y - p.h;
+
+      // тень
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(x + p.w / 2, GROUND_Y + 4, p.w / 2, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // тело какашки (три "шарика")
+      ctx.fillStyle = '#6b3e1e';
+      ctx.strokeStyle = '#2a1608';
+      ctx.lineWidth = 2;
+
+      // нижний слой
+      ctx.beginPath();
+      ctx.ellipse(x + p.w / 2, y + p.h - 8, p.w / 2, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // средний слой
+      ctx.beginPath();
+      ctx.ellipse(x + p.w / 2, y + p.h - 17, p.w / 2.6, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // верхний слой
+      ctx.beginPath();
+      ctx.ellipse(x + p.w / 2, y + p.h - 26, p.w / 3.4, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // хвостик
+      ctx.beginPath();
+      ctx.moveTo(x + p.w / 2, y + p.h - 32);
+      ctx.quadraticCurveTo(x + p.w / 2 + 6, y + p.h - 40, x + p.w / 2 + 12, y + p.h - 36);
+      ctx.stroke();
+
+      // глазки
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2 - 6, y + p.h - 20, 4, 0, Math.PI * 2);
+      ctx.arc(x + p.w / 2 + 6, y + p.h - 20, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#000';
+      // зрачки смотрят вперёд
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2 - 4, y + p.h - 20, 2, 0, Math.PI * 2);
+      ctx.arc(x + p.w / 2 + 8, y + p.h - 20, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // улыбка
+      ctx.strokeStyle = '#2a1608';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2, y + p.h - 13, 5, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+    }
+
+    // ==== Рисование банана ====
+    function drawBanana(b) {
+      ctx.save();
+      ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+      ctx.rotate(-0.3);
+
+      // тело банана
+      ctx.fillStyle = '#ffd700';
+      ctx.strokeStyle = '#b8860b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-b.w / 2, 0);
+      ctx.quadraticCurveTo(-b.w / 4, -b.h / 2, b.w / 2, -b.h / 4);
+      ctx.quadraticCurveTo(b.w / 4, b.h / 2, -b.w / 2, 0);
+      ctx.fill();
+      ctx.stroke();
+
+      // кончики
+      ctx.fillStyle = '#8b4513';
+      ctx.beginPath();
+      ctx.arc(-b.w / 2, 0, 2.5, 0, Math.PI * 2);
+      ctx.arc(b.w / 2, -b.h / 4, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // ==== Рисование фона ====
+    function drawBackground() {
+      // небо
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, '#87ceeb');
+      grad.addColorStop(1, '#e0f6ff');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // облака
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      clouds.forEach(c => {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 14, 0, Math.PI * 2);
+        ctx.arc(c.x + 14, c.y + 4, 11, 0, Math.PI * 2);
+        ctx.arc(c.x - 14, c.y + 4, 11, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // земля
+      ctx.fillStyle = '#deb887';
+      ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+      ctx.fillStyle = '#8b4513';
+      ctx.fillRect(0, GROUND_Y, W, 3);
+
+      // декоративные камешки/травка
+      ctx.fillStyle = '#a0522d';
+      for (let i = 0; i < W; i += 40) {
+        const off = (frame * speed * 0.5 + i) % (W + 40) - 20;
+        ctx.fillRect(off, GROUND_Y + 10, 3, 3);
+        ctx.fillRect(off + 15, GROUND_Y + 20, 2, 2);
+      }
+    }
+
+    // ==== Спавн бананов ====
+    function spawnBanana() {
+      const h = 24 + Math.random() * 10;
+      const w = 30 + Math.random() * 10;
+      bananas.push({
+        x: W + 20,
+        y: GROUND_Y - h,
+        w: w,
+        h: h
+      });
+    }
+
+    function spawnFlyingBanana() {
+      const h = 20;
+      const w = 30;
+      const y = GROUND_Y - 70 - Math.random() * 30;
+      flyingBananas.push({
+        x: W + 20,
+        y: y,
+        w: w,
+        h: h
+      });
+    }
+
+    // ==== Столкновение ====
+    function collides(a, b) {
+      return a.x < b.x + b.w &&
+             a.x + a.w > b.x &&
+             a.y < b.y + b.h &&
+             a.y + a.h > b.y;
+    }
+
+    function poopBox() {
+      return {
+        x: poop.x + 4,
+        y: poop.y - poop.h + 4,
+        w: poop.w - 8,
+        h: poop.h - 8
+      };
+    }
+
+    // ==== Обновление ====
+    function update() {
+      frame++;
+
+      // облака
+      clouds.forEach(c => {
+        c.x -= c.s;
+        if (c.x < -30) {
+          c.x = W + 30;
+          c.y = 20 + Math.random() * 80;
+        }
+      });
+
+      if (state !== 'playing') return;
+
+      // гравитация
+      poop.vy += GRAVITY;
+      poop.y += poop.vy;
+
+      if (poop.y >= GROUND_Y) {
+        poop.y = GROUND_Y;
+        poop.vy = 0;
+        poop.onGround = true;
+      } else {
+        poop.onGround = false;
+      }
+
+      // ускорение
+      if (frame % 300 === 0) {
+        speed += 0.5;
+        spawnInterval = Math.max(45, spawnInterval - 3);
+      }
+
+      // спавн
+      spawnTimer++;
+      if (spawnTimer >= spawnInterval) {
+        spawnTimer = 0;
+        if (Math.random() < 0.2 && score > 5) {
+          spawnFlyingBanana();
+        } else {
+          spawnBanana();
+        }
+      }
+
+      // движение бананов
+      bananas.forEach(b => b.x -= speed);
+      flyingBananas.forEach(b => b.x -= speed + 1);
+
+      // столкновения
+      const pb = poopBox();
+      for (let i = bananas.length - 1; i >= 0; i--) {
+        if (collides(pb, bananas[i])) {
+          gameOver();
+          return;
+        }
+      }
+      for (let i = flyingBananas.length - 1; i >= 0; i--) {
+        if (collides(pb, flyingBananas[i])) {
+          gameOver();
+          return;
+        }
+      }
+
+      // удаление ушедших
+      bananas = bananas.filter(b => b.x + b.w > -20);
+      flyingBananas = flyingBananas.filter(b => b.x + b.w > -20);
+
+      // счёт
+      score++;
+      scoreEl.textContent = score;
+    }
+
+    // ==== Отрисовка ====
+    function draw() {
+      drawBackground();
+
+      bananas.forEach(drawBanana);
+      flyingBananas.forEach(drawBanana);
+      drawPoop(poop);
+
+      // счёт на канвасе
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 16px "Courier New", monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('SCORE ' + String(score).padStart(5, '0'), W - 15, 25);
+      ctx.textAlign = 'left';
+
+      if (state === 'ready') {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, H / 2 - 50, W, 100);
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 28px "Comic Sans MS", cursive';
+        ctx.textAlign = 'center';
+        ctx.fillText('💩 КАКАШКА-РАННЕР 💩', W / 2, H / 2 - 10);
+
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 16px "Courier New", monospace';
+        ctx.fillText('Нажми ПРОБЕЛ чтобы начать', W / 2, H / 2 + 25);
+        ctx.textAlign = 'left';
+      }
+
+      if (state === 'over') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, H / 2 - 70, W, 140);
+
+        ctx.fillStyle = '#ff0000';
+        ctx.font = 'bold 32px "Comic Sans MS", cursive';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', W / 2, H / 2 - 20);
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 18px "Courier New", monospace';
+        ctx.fillText('Счёт: ' + score, W / 2, H / 2 + 15);
+
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 14px "Courier New", monospace';
+        ctx.fillText('Нажми ПРОБЕЛ для перезапуска', W / 2, H / 2 + 45);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    // ==== Игровой цикл ====
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // ==== Управление ====
+    function jump() {
+      if (state === 'playing' && poop.onGround) {
+        poop.vy = JUMP_POWER;
+        poop.onGround = false;
+      }
+    }
+
+    function startGame() {
+      state = 'playing';
+      score = 0;
+      speed = 6;
+      frame = 0;
+      spawnTimer = 0;
+      spawnInterval = 90;
+      bananas = [];
+      flyingBananas = [];
+      poop.y = GROUND_Y;
+      poop.vy = 0;
+      poop.onGround = true;
+      scoreEl.textContent = '0';
+    }
+
+    function gameOver() {
+      state = 'over';
+      if (score > hiScore) {
+        hiScore = score;
+        localStorage.setItem('kakaHiScore', String(hiScore));
+        hiEl.textContent = hiScore;
+      }
+    }
+
+    function handleSpace(e) {
+      if (e.code === 'Space' || e.key === ' ' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (state === 'playing') {
+          jump();
+        } else {
+          startGame();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleSpace);
+    canvas.addEventListener('click', () => {
+      if (state === 'playing') jump();
+      else startGame();
+    });
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (state === 'playing') jump();
+      else startGame();
+    }, { passive: false });
+
+    // запуск
+    loop();
+  })();
+  </script>
 
 </body>
 </html>
